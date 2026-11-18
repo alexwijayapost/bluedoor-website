@@ -442,7 +442,7 @@ body.ready .kpulse{opacity:1}
 
 <div class="chip">Concept v5<button type="button" id="replay">Replay intro</button></div>
 <audio id="bgm" src="audio/mellow-morning-keys.mp3" preload="none" loop></audio>
-<button class="snd" id="snd" type="button" aria-pressed="false" aria-label="Sound"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5H4Z" fill="currentColor"/><g class="wave"><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18 6.5a7.5 7.5 0 0 1 0 11"/></g><g class="mute"><path d="m16 9.5 5 5M21 9.5l-5 5"/></g></svg><span id="sndTxt">Sound off</span></button>
+<button class="snd" id="snd" type="button" aria-pressed="true" aria-label="Sound"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5H4Z" fill="currentColor"/><g class="wave"><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18 6.5a7.5 7.5 0 0 1 0 11"/></g><g class="mute"><path d="m16 9.5 5 5M21 9.5l-5 5"/></g></svg><span id="sndTxt">Sound on</span></button>
 
 <script>
 (function(){
@@ -573,34 +573,33 @@ function loop(now){
 addEventListener('scroll',onScroll,{passive:true}); addEventListener('resize',layout); layout(); requestAnimationFrame(loop);
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(layout);
 /* ---------- sound ----------
-   Browsers only allow sound after a click or tap, so the visitor's click on the door is what turns it on:
-   knock, the door opens, then the music fades in and loops. The Sound button mutes everything. */
+   Browsers only allow sound after a click or tap, so the visitor's click on the door is what starts it:
+   knock, the door opens, then the music comes in and loops. The Sound button mutes everything.
+   The music is a plain audio player on purpose (it also plays on phones set to silent); its soft start and
+   background level are part of the audio file itself, so it sounds the same on every device. */
 const AUTO_SOUND=true;   // false = stay silent until the Sound button is pressed
-const MUSIC_VOL=.3;      // background level, well under the knocks
 let actx=null, soundOn=false, noiseBuf=null;
-const bgm=$('#bgm'); let mGain=null, mRamp=null, mUp=false, mFirst=true, mStop=0, mFade=0, doorOpened=false;
+const bgm=$('#bgm'); let mUp=false, mFirst=true, doorOpened=false;
 let muted=false; try{muted=sessionStorage.getItem('tbd-sound')==='off'}catch(e){}
+let want=AUTO_SOUND&&!muted;   // what the Sound button shows
+function paintSound(){ $('#snd').setAttribute('aria-pressed',want); $('#sndTxt').textContent=want?'Sound on':'Sound off'; }
+paintSound();
 function initAudio(){ if(actx)return; actx=new (window.AudioContext||window.webkitAudioContext)();
-  noiseBuf=actx.createBuffer(1,actx.sampleRate*2,actx.sampleRate); const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
-  if(bgm){ try{ mGain=actx.createGain(); mGain.gain.value=0; actx.createMediaElementSource(bgm).connect(mGain).connect(actx.destination); }catch(e){ mGain=null; } } }
-function mLevel(v,secs){ // music volume, moved smoothly
-  if(mGain){ const t=actx.currentTime, g=mGain.gain, d=Math.max(.02,secs), cur=mRamp?lerp(mRamp.a,mRamp.b,clamp((t-mRamp.t)/mRamp.d)):0;   // where the fade is right now, worked out here so every browser agrees
-    g.cancelScheduledValues(t); g.setValueAtTime(cur,t); g.linearRampToValueAtTime(v,t+d); mRamp={a:cur,b:v,t,d}; return; }
-  cancelAnimationFrame(mFade); const from=bgm.muted?0:bgm.volume, t0=performance.now(); if(v>0)bgm.muted=false;   // fallback without a mixer (phones ignore volume, so mute does the work)
-  (function f(now){ const p=secs>0?clamp((now-t0)/(secs*1000)):1; try{bgm.volume=clamp(lerp(from,v,p))}catch(e){} if(p<1)mFade=requestAnimationFrame(f); else if(v===0)bgm.muted=true; })(t0); }
+  noiseBuf=actx.createBuffer(1,actx.sampleRate*2,actx.sampleRate); const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1; }
 function musicSync(inGesture){ // one place decides what the music should be doing right now
   if(!bgm)return;
-  if(!(soundOn&&!document.hidden)){ mUp=false; if(!bgm.paused){ mLevel(0,.4); clearTimeout(mStop); mStop=setTimeout(()=>{ if(!(soundOn&&!document.hidden))bgm.pause() },450); } return; }
-  clearTimeout(mStop);
-  if(bgm.paused){ if(!doorOpened&&!inGesture)return; mLevel(0,0); const p=bgm.play(); if(p&&p.then)p.then(()=>musicSync(false),()=>{}); return; }   // starts silent inside the click, so it is allowed to be heard later
-  if(doorOpened&&!mUp){ mUp=true; if(mFirst){ mFirst=false; try{bgm.currentTime=0}catch(e){} } mLevel(MUSIC_VOL,3.5); }
+  if(!(soundOn&&!document.hidden)){ mUp=false; if(!bgm.paused)bgm.pause(); return; }
+  if(bgm.paused){ if(!doorOpened&&!inGesture)return; if(!doorOpened)bgm.muted=true;   // before the door: start silently inside the click, so the browser lets it be heard later
+    const p=bgm.play(); if(p&&p.then)p.then(()=>musicSync(false),()=>{}); return; }
+  if(doorOpened&&!mUp){ mUp=true; if(mFirst){ mFirst=false; try{bgm.currentTime=0}catch(e){} } bgm.muted=false; }
 }
+if(bgm)bgm.addEventListener('pause',()=>{ mUp=false });   // if a browser stops it, the next click brings it back
 function doorPassed(){ if(doorOpened)return; doorOpened=true; setTimeout(()=>musicSync(false),900); }   // the music waits for the door
-function soundSet(on,inGesture){ soundOn=on; if(on){ initAudio(); if(actx.state!=='running'&&actx.resume)actx.resume(); }
-  $('#snd').setAttribute('aria-pressed',on); $('#sndTxt').textContent=on?'Sound on':'Sound off'; musicSync(inGesture); }
+function soundSet(on,inGesture){ soundOn=on; if(on){ initAudio(); if(actx.state!=='running'&&actx.resume)actx.resume(); } musicSync(inGesture); }
 function gesture(e){ if(muted||(e.target&&e.target.closest&&e.target.closest('#snd')))return;
   if(!soundOn){ if(AUTO_SOUND)soundSet(true,true); return; }
-  if(actx.state!=='running'&&actx.resume)actx.resume(); if(bgm&&bgm.paused)musicSync(true); }
+  if(actx.state!=='running'&&actx.resume)actx.resume();
+  if(bgm){ if(bgm.paused)musicSync(true); else{ const p=bgm.play(); if(p&&p.catch)p.catch(()=>{}) } } }   // repeating play inside every click keeps strict browsers happy
 ['pointerup','touchend','click','keydown'].forEach(t=>addEventListener(t,gesture,true));
 document.addEventListener('visibilitychange',()=>musicSync(false));
 function thump(t,f,g){ // knuckle on wood: a low body tone plus a short woody click
@@ -615,8 +614,8 @@ T.sfx={
     g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.22,t+.8); g.gain.exponentialRampToValueAtTime(.0001,t+1.8); n.connect(bp).connect(g).connect(actx.destination); n.start(t); n.stop(t+1.9); },
   swing(){ if(!soundOn)return; thump(actx.currentTime+.01,120,.16); }
 };
-$('#snd').onclick=()=>{ const on=!soundOn; muted=!on; try{ on?sessionStorage.removeItem('tbd-sound'):sessionStorage.setItem('tbd-sound','off') }catch(e){}
-  soundSet(on,true); if(on&&!doorOpened)T.sfx.knock(); };
+$('#snd').onclick=()=>{ want=!want; muted=!want; try{ want?sessionStorage.removeItem('tbd-sound'):sessionStorage.setItem('tbd-sound','off') }catch(e){}
+  paintSound(); soundSet(want,true); if(want&&!doorOpened)T.sfx.knock(); };
 document.querySelectorAll('a[href^="#"]').forEach(a=>a.addEventListener('click',e=>{const id=a.getAttribute('href').slice(1);const t=id==='top'?document.body:document.getElementById(id);if(!t)return;e.preventDefault();scrollToY(id==='top'?0:t.getBoundingClientRect().top+scrollY+2,1300)}));
 })();
 </script>
