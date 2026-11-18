@@ -1,0 +1,9 @@
+---
+# Runs on the hosting when "Deploy HEAD Commit" is pressed in cPanel (Git Version Control).
+# preview/ goes to the private preview folder, live/ goes to the public website.
+deployment:
+  tasks:
+    - export SITE=$HOME/public_html
+    - /bin/mkdir -p $SITE/preview-7f9ffcbc
+    - /bin/cp -R preview/. $SITE/preview-7f9ffcbc/
+    - /bin/cp -R live/. $SITE/

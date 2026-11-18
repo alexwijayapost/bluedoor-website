@@ -1,0 +1,6 @@
+Options -Indexes
+<IfModule mod_headers.c>
+  <FilesMatch "\.(js|jpg|jpeg|png|svg|webp|woff2|mp4)$">
+    Header set Cache-Control "public, max-age=86400"
+  </FilesMatch>
+</IfModule>

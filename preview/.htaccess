@@ -1,0 +1,7 @@
+Options -Indexes
+<IfModule mod_headers.c>
+  Header set X-Robots-Tag "noindex, nofollow"
+  <FilesMatch "\.(js|jpg|jpeg|png|svg|webp|woff2|mp4|mp3)$">
+    Header set Cache-Control "public, max-age=86400"
+  </FilesMatch>
+</IfModule>
